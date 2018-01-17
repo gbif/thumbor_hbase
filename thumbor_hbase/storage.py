@@ -11,6 +11,7 @@ from json import loads, dumps
 from hashlib import md5
 import time
 import re
+import random
 
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
@@ -181,7 +182,11 @@ class Storage(BaseStorage):
         self.storage.mutateRowTs(self.table, key, r, ts)
 
     def _connect(self):
-        transport = TBufferedTransport(TSocket(host=self.context.config.HBASE_STORAGE_SERVER_HOST, port=self.context.config.HBASE_STORAGE_SERVER_PORT))
+        if hasattr(self.context.config, 'HBASE_STORAGE_SERVER_HOSTS'):
+            host = random.choice(self.context.config.HBASE_STORAGE_SERVER_HOSTS)
+        else:
+            host = self.context.config.HBASE_STORAGE_SERVER_HOST
+        transport = TBufferedTransport(TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT))
         transport.open()
         protocol = TBinaryProtocol.TBinaryProtocol(transport)
         self.storage = Hbase.Client(protocol)
