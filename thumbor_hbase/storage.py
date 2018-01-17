@@ -179,14 +179,31 @@ class Storage(BaseStorage):
         if self.storage is None:
             self._connect()
 
-        self.storage.mutateRowTs(self.table, key, r, ts)
+        try:
+            self.storage.mutateRowTs(self.table, key, r, ts)
+        except:
+            # Try once more, seems to happen if downloading takes too long.
+            self._connect()
+            self.storage.mutateRowTs(self.table, key, r, ts)
+
 
     def _connect(self):
         if hasattr(self.context.config, 'HBASE_STORAGE_SERVER_HOSTS'):
             host = random.choice(self.context.config.HBASE_STORAGE_SERVER_HOSTS)
         else:
             host = self.context.config.HBASE_STORAGE_SERVER_HOST
+
         transport = TBufferedTransport(TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT))
+
+        socket = TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT)
+        # Timeout is sum of HTTP timeouts, plus a bit.
+        try:
+            timeout = (self.context.config.HTTP_LOADER_CONNECT_TIMEOUT + self.context.config.HTTP_LOADER_REQUEST_TIMEOUT) * 1.05
+            socket.setTimeout(timeout * 1000)
+        except:
+            pass
+
+        transport = TBufferedTransport(socket)
         transport.open()
         protocol = TBinaryProtocol.TBinaryProtocol(transport)
         self.storage = Hbase.Client(protocol)
