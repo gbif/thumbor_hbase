@@ -116,7 +116,9 @@ class Storage(BaseStorage):
 
         if self.storage is None:
             self._connect()
-        self.storage.deleteAllRowTs(self.table, key, ts)
+        # The timestamp is in seconds, but HBase has milliseconds, so it's always too old.
+        #self.storage.deleteAllRowTs(self.table, key, ts)
+        self.storage.deleteAllRow(self.table, key)
 
     def resolve_original_photo_path(self,filename):
         return filename
