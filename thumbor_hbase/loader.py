@@ -11,7 +11,20 @@
 from thumbor_hbase.storage import Storage
 from thumbor.context import Context
 from thumbor.config import Config
+from thumbor.loaders import LoaderResult
 
 def load(context, path, callback):
+
+    def callback_wrapper(result):
+        r = LoaderResult()
+        if result is not None:
+            r.successful = True
+            r.buffer = result
+        else:
+            r.error = LoaderResult.ERROR_NOT_FOUND
+            r.successful = False
+
+        callback(r)
+
     storage = Storage(context)
-    callback(storage.get(path))
+    storage.get(path, callback_wrapper)
