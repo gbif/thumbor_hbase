@@ -21,6 +21,7 @@ from hbase.ttypes import Mutation
 
 from thumbor.storages import BaseStorage
 from tornado.concurrent import return_future
+from thumbor.utils import logger
 
 class Storage(BaseStorage):
     crypto_col = 'crypto'
@@ -154,7 +155,10 @@ class Storage(BaseStorage):
             else:
                 r = self.storage.get(self.table, key, self.data_fam + ':' + col)[0]
         except IndexError:
-            r = None 
+            r = None
+        except:
+            r = None
+            logger.error("Error retrieving image from HBase; key "+key)
 
         return r
 
