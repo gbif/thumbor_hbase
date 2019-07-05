@@ -10,7 +10,6 @@
 from json import loads, dumps
 from hashlib import md5
 import re
-import random
 
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
@@ -26,6 +25,7 @@ class Storage(BaseStorage):
     crypto_col = 'crypto'
     detector_col = 'detector'
     image_col = 'raw'
+    hbase_server_offset = 0
     storage = None
 
     def __init__(self,context):
@@ -131,6 +131,7 @@ class Storage(BaseStorage):
         except:
             r = None
             logger.error("Error retrieving image from HBase; key "+key)
+            self.hbase_server_offset = self.hbase_server_offset+1
 
         return r
 
@@ -157,7 +158,7 @@ class Storage(BaseStorage):
 
     def _connect(self):
         if hasattr(self.context.config, 'HBASE_STORAGE_SERVER_HOSTS'):
-            host = random.choice(self.context.config.HBASE_STORAGE_SERVER_HOSTS)
+            host = self.context.config.HBASE_STORAGE_SERVER_HOSTS[(self.context.server.port + self.hbase_server_offset) % len(self.context.config.HBASE_STORAGE_SERVER_HOSTS)]
         else:
             host = self.context.config.HBASE_STORAGE_SERVER_HOST
 
@@ -166,12 +167,17 @@ class Storage(BaseStorage):
         socket = TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT)
         # Timeout is sum of HTTP timeouts, plus a bit.
         try:
-            timeout = (self.context.config.HTTP_LOADER_CONNECT_TIMEOUT + self.context.config.HTTP_LOADER_REQUEST_TIMEOUT) * 1.05
+            timeout = 5
             socket.setTimeout(timeout * 1000)
         except:
             pass
 
-        transport = TBufferedTransport(socket)
-        transport.open()
-        protocol = TBinaryProtocol.TBinaryProtocol(transport)
-        self.storage = Hbase.Client(protocol)
+        try:
+            transport = TBufferedTransport(socket)
+            transport.open()
+            protocol = TBinaryProtocol.TBinaryProtocol(transport)
+            self.storage = Hbase.Client(protocol)
+            logger.info("Connected to HBase server "+host+":"+str(self.context.config.HBASE_STORAGE_SERVER_PORT))
+        except:
+            logger.error("Error connecting to HBase server "+host+":"+str(self.context.config.HBASE_STORAGE_SERVER_PORT))
+            self.hbase_server_offset = self.hbase_server_offset+1
