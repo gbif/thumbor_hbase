@@ -9,7 +9,6 @@
 
 from json import loads, dumps
 from hashlib import md5
-import time
 import re
 import random
 
@@ -102,14 +101,6 @@ class Storage(BaseStorage):
 
     # remove image entries
     def remove(self,key):
-        ts = int(time.time())
-        try:
-            if (self.context.request_handler.request.arguments['ts']):
-                ts=int(self.context.request_handler.request.arguments['ts'][0])
-                key=re.sub(r'(\?|&)ts=\d+','',key)
-        except (AttributeError, KeyError):
-            ts = int(time.time())
-
         try:
             key = md5(key).hexdigest() + '-' + key
         except UnicodeEncodeError:
@@ -117,8 +108,6 @@ class Storage(BaseStorage):
 
         if self.storage is None:
             self._connect()
-        # The timestamp is in seconds, but HBase has milliseconds, so it's always too old.
-        #self.storage.deleteAllRowTs(self.table, key, ts)
         self.storage.deleteAllRow(self.table, key)
 
     def resolve_original_photo_path(self,filename):
@@ -127,14 +116,6 @@ class Storage(BaseStorage):
     # GET a Cell value in HBase
     def _get(self,key,col):
 
-        ts = None
-        try:
-            if (self.context.request_handler.request.arguments['ts']):
-                ts=int(self.context.request_handler.request.arguments['ts'][0])
-                key=re.sub(r'(\?|&)ts=\d+','',key)
-        except (AttributeError, KeyError):
-            None
-
         try:
             key = md5(key).hexdigest() + '-' + key
         except UnicodeEncodeError:
@@ -143,17 +124,8 @@ class Storage(BaseStorage):
         if self.storage is None:
             self._connect()
 
-        #get specific version if ?ts= parameter is used
         try:
-            if ts != None:
-                r = self.storage.getRowWithColumnsTs(self.table, key, [self.data_fam + ':' + col], ts+1)[0].columns.values()[0]
-                # due to bug HBASE-7924 timestamp is an upper limit to timerange (lower java Long.MIN_VALUE)
-                # resulting in getting last value of the cell until the timestamp and preventing from geting updates
-                # this is a hack to handle it
-                if r.timestamp < ts:
-                    r = None
-            else:
-                r = self.storage.get(self.table, key, self.data_fam + ':' + col)[0]
+            r = self.storage.get(self.table, key, self.data_fam + ':' + col)[0]
         except IndexError:
             r = None
         except:
@@ -164,16 +136,6 @@ class Storage(BaseStorage):
 
     # PUT value in a Cell of HBase
     def _put(self, key, col, value):
-        ts = None
-
-        try:
-            if (self.context.request_handler.request.arguments['ts']):
-                ts=int(self.context.request_handler.request.arguments['ts'][0])
-                key=re.sub(r'(\?|&)ts=\d+','',key)
-            else:
-                ts=int(time.time())
-        except (AttributeError, KeyError):
-            ts=int(time.time())
 
         try:
             key = md5(key).hexdigest() + '-' + key
@@ -186,11 +148,11 @@ class Storage(BaseStorage):
             self._connect()
 
         try:
-            self.storage.mutateRowTs(self.table, key, r, ts)
+            self.storage.mutateRow(self.table, key, r)
         except:
             # Try once more, seems to happen if downloading takes too long.
             self._connect()
-            self.storage.mutateRowTs(self.table, key, r, ts)
+            self.storage.mutateRow(self.table, key, r)
 
 
     def _connect(self):
