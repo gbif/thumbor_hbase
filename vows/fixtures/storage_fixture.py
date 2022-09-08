@@ -1,12 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# thumbor imaging service
-# https://github.com/globocom/thumbor/wiki
+# Thumbor imaging service — HBase module
+# https://github.com/thumbor-community/hbase_storage/
 
-# Licensed under the MIT license: 
-# http://www.opensource.org/licenses/mit-license
-# Copyright (c) 2011 globo.com timehome@corp.globo.com
+# Licensed under the MIT license:
+# https://opensource.org/license/mit/
 
 from os.path import join, abspath, dirname
 
@@ -17,7 +16,7 @@ from thumbor.importer import Importer
 IMAGE_URL = 's.glbimg.com/some/image_%s.jpg'
 IMAGE_PATH = join(abspath(dirname(__file__)), 'image.jpg')
 
-with open(IMAGE_PATH, 'r') as img:
+with open(IMAGE_PATH, 'rb') as img:
     IMAGE_BYTES = img.read()
 
 def get_server(key=None):

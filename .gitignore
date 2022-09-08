@@ -1,3 +1,10 @@
 *.pyc
 dist
 MANIFEST
+bin/
+lib/
+share/
+include/
+lib64
+pyvenv.cfg
+.coverage

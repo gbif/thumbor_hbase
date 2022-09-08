@@ -1,0 +1,5 @@
+Generated with
+
+    thrift -gen py Hbase.thrift
+
+using https://github.com/apache/hbase/blob/rel/2.4.13/hbase-thrift/src/main/resources/org/apache/hadoop/hbase/thrift/Hbase.thrift

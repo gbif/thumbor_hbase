@@ -1,35 +1,35 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# thumbor imaging service
-# https://github.com/dhardy92/thumbor_hbase/
+# Thumbor imaging service — HBase module
+# https://github.com/thumbor-community/hbase_storage/
 
 # Licensed under the MIT license:
-# http://www.opensource.org/licenses/mit-license
+# https://opensource.org/license/mit/
 
 from json import loads, dumps
 from hashlib import md5
-import re
 
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
 from thrift.protocol import TBinaryProtocol
-from hbase import Hbase
-from hbase.ttypes import Mutation
+from thumbor_hbase.hbase import Hbase
+from thumbor_hbase.hbase.ttypes import Mutation
 
-from thumbor.storages import BaseStorage
-from tornado.concurrent import return_future
+from thumbor import storages
 from thumbor.utils import logger
 
-class Storage(BaseStorage):
-    crypto_col = 'crypto'
-    detector_col = 'detector'
-    image_col = 'raw'
+class Storage(storages.BaseStorage):
+    crypto_col = b'crypto'
+    detector_col = b'detector'
+    image_col = b'raw'
     hbase_server_offset = 0
     storage = None
 
     def __init__(self,context):
         self.context=context
+        assert(isinstance(self.context.config.HBASE_STORAGE_TABLE, bytes))
+        assert(isinstance(self.context.config.HBASE_STORAGE_FAMILY, bytes))
         self.table = self.context.config.HBASE_STORAGE_TABLE
         self.data_fam = self.context.config.HBASE_STORAGE_FAMILY
         try:
@@ -38,126 +38,113 @@ class Storage(BaseStorage):
             None
 
     # put image content
-    def put(self, path, bytes):
+    async def put(self, path, bytes):
         self._put(path, self.image_col, bytes )
 
         return path
 
     # put crypto key for signature
-    def put_crypto(self, path):
+    async def put_crypto(self, path):
         if not self.context.config.STORES_CRYPTO_KEY_FOR_EACH_IMAGE:
             return
 
         if not self.context.config.SECURITY_KEY:
             raise RuntimeError("STORES_CRYPTO_KEY_FOR_EACH_IMAGE can't be True if no SECURITY_KEY specified")
 
-        self._put(path, self.crypto_col,self.context.config.SECURITY_KEY)
+        self._put(path, self.crypto_col, self.context.config.SECURITY_KEY.encode('utf-8'))
 
-    # put detector Json
-    def put_detector_data(self, path, data):
-        self._put(path, self.detector_col, dumps(data))
+    # put detector JSON
+    async def put_detector_data(self, path, data):
+        self._put(path, self.detector_col, dumps(data).encode('utf-8'))
 
     # get signature key
-    @return_future
-    def get_crypto(self, path, callback):
+    async def get_crypto(self, path):
         if not self.context.config.STORES_CRYPTO_KEY_FOR_EACH_IMAGE:
-            callback(None)
+            None
         else:
             r = self._get(path, self.crypto_col)
             if not r:
-                callback(None)
+                return None
             else:
-                callback(r.value)
+                return r.value
 
     # get detector Json
-    @return_future
-    def get_detector_data(self, path, callback):
+    async def get_detector_data(self, path):
         r = self._get(path, self.detector_col)
 
         if r is not None:
-            callback(loads(r.value))
+            return loads(r.value)
         else:
-            callback(None)
+            return None
 
     # get image content
-    @return_future
-    def get(self, path, callback):
+    async def get(self, path):
         r = self._get(path, self.image_col)
 
         if r is not None:
-             callback(r.value)
+            return r.value
         else:
-             callback(None)
+            return None
 
     # test image exists
-    @return_future
-    def exists(self, path, callback):
+    async def exists(self, path):
         r = self._get(path, self.image_col)
 
         if r is not None:
-            callback(len(r.value) != 0)
+            return len(r.value) != 0
         else:
-            callback(False)
+            return False
+
+    def makeKey(self,key):
+        return (md5(key.encode('utf-8', 'backslashreplace')).hexdigest() + '-' + key).encode('utf-8')
 
     # remove image entries
-    def remove(self,key):
-        try:
-            key = md5(key).hexdigest() + '-' + key
-        except UnicodeEncodeError:
-            key = md5(key.encode('utf-8')).hexdigest() + '-' + key.encode('utf-8')
+    async def remove(self,key):
+        key = self.makeKey(key)
 
         if self.storage is None:
             self._connect()
-        self.storage.deleteAllRow(self.table, key)
-
-    def resolve_original_photo_path(self,filename):
-        return filename
+        self.storage.deleteAllRow(self.table, key, {})
 
     # GET a Cell value in HBase
-    def _get(self,key,col):
-
-        try:
-            key = md5(key).hexdigest() + '-' + key
-        except UnicodeEncodeError:
-            key = md5(key.encode('utf-8')).hexdigest() + '-' + key.encode('utf-8')
+    def _get(self, key, col):
+        key = self.makeKey(key)
+        logger.debug("_get column %s of row %s", col, key)
 
         if self.storage is None:
             self._connect()
 
         try:
-            r = self.storage.get(self.table, key, self.data_fam + ':' + col)[0]
+            r = self.storage.get(self.table, key, (self.data_fam + b':' + col), {})[0]
         except IndexError:
             r = None
         except:
             r = None
-            logger.error("Error retrieving image from HBase; key "+key)
+            logger.error("Error retrieving image from HBase; key %s column %s", key, col)
             self.hbase_server_offset = self.hbase_server_offset+1
 
         return r
 
     # PUT value in a Cell of HBase
     def _put(self, key, col, value):
+        key = self.makeKey(key)
+        logger.debug("_put %d bytes into column %s for row %s", len(value), col, key)
 
-        try:
-            key = md5(key).hexdigest() + '-' + key
-        except UnicodeEncodeError:
-            key = md5(key.encode('utf-8')).hexdigest() + '-' + key.encode('utf-8')
-
-        r = [Mutation(column=self.data_fam + ':' + col, value=value)]
+        r = [Mutation(column=(self.data_fam + b':' + col), value=value)]
 
         if self.storage is None:
             self._connect()
 
         try:
-            self.storage.mutateRow(self.table, key, r)
+            self.storage.mutateRow(self.table, key, r, {})
         except:
             # Try once more, seems to happen if downloading takes too long.
+            logger.warning("repeating _put %d bytes into column %s for row %s", len(value), col, key)
             self._connect()
-            self.storage.mutateRow(self.table, key, r)
-
+            self.storage.mutateRow(self.table, key, r, {})
 
     def _connect(self):
-        if hasattr(self.context.config, 'HBASE_STORAGE_SERVER_HOSTS'):
+        if hasattr(self.context.config, 'HBASE_STORAGE_SERVER_HOSTS') and self.context.config.HBASE_STORAGE_SERVER_HOSTS is not None:
             host = self.context.config.HBASE_STORAGE_SERVER_HOSTS[(self.context.server.port + self.hbase_server_offset) % len(self.context.config.HBASE_STORAGE_SERVER_HOSTS)]
         else:
             host = self.context.config.HBASE_STORAGE_SERVER_HOST
