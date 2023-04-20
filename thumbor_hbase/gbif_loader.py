@@ -84,6 +84,7 @@ async def load(context, url_or_gbif_query):
             #logger.info("Unsigned request for %s denied", url_or_gbif_query)
             #return result
             logger.warning("Unsigned request for %s ALLOWED ANYWAY", url_or_gbif_query)
+            context.headers['unsafe'] = 'unsafe'
             return await hbase_migration_loader.load(context, url_or_gbif_query)
         else:
             logger.debug("Loading non-occurrence image %s", url_or_gbif_query)

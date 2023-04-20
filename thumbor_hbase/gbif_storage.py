@@ -73,11 +73,14 @@ class Storage(storage.Storage):
             image_url_hash = self.context.headers['image_url_hash']
 
             r += [
-                Mutation(column=(self.data_fam + b':' + col), value=value),
                 Mutation(column=b'metadata:dataset_key', value=dataset_key.encode()),
                 Mutation(column=b'metadata:occurrence_id', value=occurrence_id.encode()),
                 Mutation(column=b'metadata:identifier', value=media_url.encode()),
                 Mutation(column=b'metadata:identifier_hash', value=image_url_hash.encode())
+            ]
+        elif 'unsafe' in self.context.headers:
+            r += [
+                Mutation(column=b'metadata:unsafe', value=self.context.headers['unsafe'].encode())
             ]
 
         if self.storage is None:
