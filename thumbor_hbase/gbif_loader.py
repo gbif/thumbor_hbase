@@ -10,7 +10,7 @@
 import hashlib
 import json
 
-from urllib.parse import quote
+from urllib.parse import urlparse, quote, unquote
 from thumbor_hbase.storage import Storage
 from . import hbase_migration_loader
 from thumbor.context import Context
@@ -42,7 +42,7 @@ async def load(context, url_or_gbif_query):
             occurrence_req.extras["reason"] = "Occurrence %s not found" % (occurrence_id)
             return occurrence_req
 
-        logger.debug("Occurrence JSON %s", occurrence_req.buffer)
+        #logger.debug("Occurrence JSON %s", occurrence_req.buffer)
 
         occurrence = json.loads(occurrence_req.buffer)
 
@@ -53,6 +53,7 @@ async def load(context, url_or_gbif_query):
                 logger.debug("On occurrence %s, media %s hashes to %s", occurrence_id, m['identifier'], m_hash.hexdigest())
                 if m_hash.hexdigest() == image_url_hash:
                     url = m['identifier']
+                    hostname = urlparse(url).hostname
                     dataset_key = occurrence['datasetKey']
                     logger.debug("On occurrence %s, found media %s to be %s", occurrence_id, image_url_hash, url)
 
@@ -60,8 +61,9 @@ async def load(context, url_or_gbif_query):
                     context.headers['occurrence_id'] = occurrence_id
                     context.headers['image_url_hash'] = image_url_hash
                     context.headers['url'] = url
+                    context.headers['hostname'] = hostname
 
-                    # During migration, read from the old HBase instead.
+                    # During migration, read from the old HBase and fall back to HTTP.
                     #return await http_loader.load(context, quote(url))
                     return await hbase_migration_loader.load(context, quote(url))
 
@@ -74,13 +76,16 @@ async def load(context, url_or_gbif_query):
             return result
 
     else:
-        # Otherwise, expect to have the request hash, otherwise return 403
+        # Normal Thumbor image request.  Expect to have the request hash, otherwise return 403
+        hostname = urlparse(unquote(url_or_gbif_query)).hostname
+        if hostname:
+            context.headers['hostname'] = hostname
         if context.request.unsafe:
             result = LoaderResult()
             result.successful = False
             result.error = 403
             result.extras["reason"] = "Images referenced directly must use signed requests"
-            # During migration, allow unsigned requests and read from the old HBase.
+            # During migration, allow unsigned requests and try the old HBase.
             #logger.info("Unsigned request for %s denied", url_or_gbif_query)
             #return result
             logger.warning("Unsigned request for %s ALLOWED ANYWAY", url_or_gbif_query)
@@ -88,6 +93,6 @@ async def load(context, url_or_gbif_query):
             return await hbase_migration_loader.load(context, url_or_gbif_query)
         else:
             logger.debug("Loading non-occurrence image %s", url_or_gbif_query)
-            # During migration, read from the old HBase instead.
+            # During migration, try the old HBase instead.
             #return await http_loader.load(context, url_or_gbif_query)
             return await hbase_migration_loader.load(context, url_or_gbif_query)
