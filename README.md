@@ -49,9 +49,15 @@ Using it is simple, just change your configuration in thumbor.conf:
     HBASE_STORAGE_TABLE = b'storage-table'
     HBASE_STORAGE_FAMILY = b'storage-family'
 
-and create a suitable table in HBase.  (You may well want to investigate [Medium Object Storage](https://hbase.apache.org/book.html#hbase_mob) and adjust this command accordingly):
+and create a suitable table in HBase:
 
     create 'thumbor', 'image'
+
+You may well want to investigate [Medium Object Storage](https://hbase.apache.org/book.html#hbase_mob) and adjust this command accordingly:
+
+    create 'thumbor',
+      {NAME => 'image', IS_MOB => 'true', MOB_THRESHOLD => '524288', IS_MOB => 'true', 'BLOCKCACHE' => 'false', 'BLOCKSIZE' => '262144'},
+      {NUMREGIONS => 128, SPLITALGO => 'HexStringSplit'}
 
 If you want to use thumbor_hbase for loading original images, change your thumbor.conf to read:
 

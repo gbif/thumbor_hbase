@@ -8,6 +8,7 @@
 # https://opensource.org/license/mit/
 
 import copy
+import random
 
 from thumbor_hbase.storage import Storage
 from . import loader
@@ -22,7 +23,8 @@ async def load(context, path):
 
     # Call the old storage, if it doesn't work fall back to HTTP.
     old_server_config = copy.deepcopy(context.config)
-    old_server_config.HBASE_STORAGE_SERVER_HOSTS = ["c5n1.gbif.org", "c5n2.gbif.org", "c5n3.gbif.org"]
+    old_server_config.HBASE_STORAGE_SERVER_HOSTS = ["c5n1.gbif.org", "c5n2.gbif.org", "c5n3.gbif.org", "c5n4.gbif.org", "c5n6.gbif.org", "c5n7.gbif.org", "c5n8.gbif.org", "c5n9.gbif.org", "c5n10.gbif.org"]
+    random.shuffle(old_server_config.HBASE_STORAGE_SERVER_HOSTS)
     old_server_config.HBASE_STORAGE_SERVER_PORT = 9090
     old_server_config.HBASE_STORAGE_TABLE = b'thumbor'
     old_server_config.HBASE_STORAGE_FAMILY = b'image'

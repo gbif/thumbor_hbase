@@ -108,6 +108,12 @@ class Storage(storage.Storage):
             ]
             use_file_storage |= hostname in self.context.config.LOCAL_FILE_STORAGE_HOSTNAMES
 
+        if 'start_time' in self.context.headers:
+            retrieval_time_ms = int((time.time_ns()-self.context.headers['start_time'])/1000)
+            r += [
+                Mutation(column=b'metadata:retrieval_time_ms', value=pack("!q", retrieval_time_ms))
+            ]
+
         if 'dataset_key' in self.context.headers:
             dataset_key = self.context.headers['dataset_key']
             occurrence_id = self.context.headers['occurrence_id']

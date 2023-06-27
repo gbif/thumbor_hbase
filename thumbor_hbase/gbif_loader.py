@@ -9,6 +9,7 @@
 
 import hashlib
 import json
+import time
 
 from urllib.parse import urlparse, quote, unquote
 from thumbor_hbase.storage import Storage
@@ -62,10 +63,15 @@ async def load(context, url_or_gbif_query):
                     context.headers['image_url_hash'] = image_url_hash
                     context.headers['url'] = url
                     context.headers['hostname'] = hostname
+                    context.headers['start_time'] = time.time_ns()
 
+                    # Proxied URLs that work on HTTP only.
+                    if hostname == 'www.tropicos.org':
+                        url = url.replace('https:', 'http:')
+
+                    return await http_loader.load(context, quote(url))
                     # During migration, read from the old HBase and fall back to HTTP.
-                    #return await http_loader.load(context, quote(url))
-                    return await hbase_migration_loader.load(context, quote(url))
+                    #return await hbase_migration_loader.load(context, quote(url))
 
         if url is None:
             result = LoaderResult()
@@ -78,6 +84,7 @@ async def load(context, url_or_gbif_query):
     else:
         # Normal Thumbor image request.  Expect to have the request hash, otherwise return 403
         hostname = urlparse(unquote(url_or_gbif_query)).hostname
+        context.headers['start_time'] = time.time_ns()
         if hostname:
             context.headers['hostname'] = hostname
         if context.request.unsafe:
@@ -85,14 +92,18 @@ async def load(context, url_or_gbif_query):
             result.successful = False
             result.error = 403
             result.extras["reason"] = "Images referenced directly must use signed requests"
-            # During migration, allow unsigned requests and try the old HBase.
+
+            # During migration, allow unsigned requests.
             #logger.info("Unsigned request for %s denied", url_or_gbif_query)
             #return result
             logger.warning("Unsigned request for %s ALLOWED ANYWAY", url_or_gbif_query)
             context.headers['unsafe'] = 'unsafe'
-            return await hbase_migration_loader.load(context, url_or_gbif_query)
+            return await http_loader.load(context, url_or_gbif_query)
+
+            # During migration, read from the old HBase and fall back to HTTP.
+            #return await hbase_migration_loader.load(context, url_or_gbif_query)
         else:
             logger.debug("Loading non-occurrence image %s", url_or_gbif_query)
+            return await http_loader.load(context, url_or_gbif_query)
             # During migration, try the old HBase instead.
-            #return await http_loader.load(context, url_or_gbif_query)
-            return await hbase_migration_loader.load(context, url_or_gbif_query)
+            #return await hbase_migration_loader.load(context, url_or_gbif_query)
