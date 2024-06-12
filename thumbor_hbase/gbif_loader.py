@@ -50,28 +50,29 @@ async def load(context, url_or_gbif_query):
         url = None
         if 'media' in occurrence:
             for m in occurrence['media']:
-                m_hash = hashlib.md5(m['identifier'].encode('utf-8'))
-                logger.debug("On occurrence %s, media %s hashes to %s", occurrence_id, m['identifier'], m_hash.hexdigest())
-                if m_hash.hexdigest() == image_url_hash:
-                    url = m['identifier']
-                    hostname = urlparse(url).hostname
-                    dataset_key = occurrence['datasetKey']
-                    logger.debug("On occurrence %s, found media %s to be %s", occurrence_id, image_url_hash, url)
+                if 'identifier' in m:
+                    m_hash = hashlib.md5(m['identifier'].encode('utf-8'))
+                    logger.debug("On occurrence %s, media %s hashes to %s", occurrence_id, m['identifier'], m_hash.hexdigest())
+                    if m_hash.hexdigest() == image_url_hash:
+                        url = m['identifier']
+                        hostname = urlparse(url).hostname
+                        dataset_key = occurrence['datasetKey']
+                        logger.debug("On occurrence %s, found media %s to be %s", occurrence_id, image_url_hash, url)
 
-                    context.headers['dataset_key'] = dataset_key
-                    context.headers['occurrence_id'] = occurrence_id
-                    context.headers['image_url_hash'] = image_url_hash
-                    context.headers['url'] = url
-                    context.headers['hostname'] = hostname
-                    context.headers['start_time'] = time.time_ns()
+                        context.headers['dataset_key'] = dataset_key
+                        context.headers['occurrence_id'] = occurrence_id
+                        context.headers['image_url_hash'] = image_url_hash
+                        context.headers['url'] = url
+                        context.headers['hostname'] = hostname
+                        context.headers['start_time'] = time.time_ns()
 
-                    # Proxied URLs that work on HTTP only.
-                    if hostname == 'www.tropicos.org':
-                        url = url.replace('https:', 'http:')
+                        # Proxied URLs that work on HTTP only.
+                        if hostname == 'www.tropicos.org':
+                            url = url.replace('https:', 'http:')
 
-                    return await http_loader.load(context, quote(url))
-                    # During migration, read from the old HBase and fall back to HTTP.
-                    #return await hbase_migration_loader.load(context, quote(url))
+                        return await http_loader.load(context, quote(url))
+                        # During migration, read from the old HBase and fall back to HTTP.
+                        #return await hbase_migration_loader.load(context, quote(url))
 
         if url is None:
             result = LoaderResult()
