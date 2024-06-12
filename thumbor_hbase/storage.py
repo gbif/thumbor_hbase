@@ -149,11 +149,9 @@ class Storage(storages.BaseStorage):
         else:
             host = self.context.config.HBASE_STORAGE_SERVER_HOST
 
-        transport = TBufferedTransport(TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT))
-
-        socket = TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT)
         # Timeout is sum of HTTP timeouts, plus a bit.
         try:
+            socket = TSocket(host=host, port=self.context.config.HBASE_STORAGE_SERVER_PORT)
             timeout = 5
             socket.setTimeout(timeout * 1000)
         except:
