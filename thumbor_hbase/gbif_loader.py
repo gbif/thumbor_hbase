@@ -89,6 +89,8 @@ async def load(context, url_or_gbif_query):
         context.headers['start_time'] = time.time_ns()
         if hostname:
             context.headers['hostname'] = hostname
+        else:
+            logger.warning("No hostname found in request %s", url_or_gbif_query)
         if context.request.unsafe:
             result = LoaderResult()
             result.successful = False

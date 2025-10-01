@@ -7,7 +7,6 @@
 # Licensed under the MIT license:
 # https://opensource.org/license/mit/
 
-import asyncio
 import os
 import time
 from hashlib import md5
@@ -28,6 +27,13 @@ from thumbor.utils import logger
 from thumbor_hbase import storage
 from thumbor_hbase.hbase import Hbase
 from thumbor_hbase.hbase.ttypes import Mutation
+
+from thumbor.importer import Importer
+from thumbor.transformer import Transformer
+from thumbor.storages.no_storage import Storage as NoStorage
+from thumbor.config import Config
+from thumbor.context import Context
+from thumbor.context import RequestParameters
 
 # Store additional metadata relevant for occurrence images from GBIF.org.
 #
@@ -83,18 +89,16 @@ class Storage(storage.Storage):
 
         return r
 
-    # Store to a local file if required, otherwise to HBase
+    # Store to a local file in special cases, otherwise to HBase
     def _put(self, key, col, value):
         path = key
         key = self.makeKey(key)
-        logger.debug("_put %d bytes into column (or local file) %s for row (or for path) %s", len(value), col, key)
+        original_image_size = len(value)
 
         use_file_storage = False
-        image_size = len(value)
         now = int(time.time())
         r = [
-            Mutation(column=(self.data_fam + b':' + col), value=value),
-            Mutation(column=b'metadata:image_size', value=pack("!q", image_size)),
+            Mutation(column=b'metadata:original_image_size', value=pack("!q", original_image_size)),
             Mutation(column=b'metadata:created', value=pack("!q", now)),
             Mutation(column=b'metadata:accessed', value=pack("!q", now)),
             Mutation(column=b'metadata:hits', value=pack("!q", 1))
@@ -135,13 +139,50 @@ class Storage(storage.Storage):
             ]
 
         # For particular hosts/datasets use file storage instead.  This is to avoid us filling up HBase
-        # with huge amount of easily-accessed data (iNaturalist).
+        # with huge amount of easily-accessed data (iNaturalist, Contentful etc).
         if use_file_storage:
+            logger.debug("_put %d bytes into local file with path %s", original_image_size, path)
             if self.local_file_storage is None:
                 self._file_connect()
-            logger.debug("Storing %s in file storage", path)
             self.local_file_put(path, value)
+        # Otherwise put in HBase
         else:
+            # Further reduce storage use by limiting images to 1200x1200px
+            source_width, source_height = self.context.request.engine.size
+            if (source_width > 1200 or source_height > 1200 or original_image_size > 300000):
+                logger.debug("Resizing large image (%dx%d, %dB) to max 1200x1200", source_width, source_height, original_image_size)
+                # Temporary context for transformation
+                importer = Importer(None)
+                importer.detectors = []
+                importer.storage = NoStorage
+                config = Config()
+                config.IGNORE_SMART_ERRORS = True
+                ctx = Context(server=None, config=config, importer=importer)
+                ctx.modules.engine = self.context.modules.engine
+                ctx.request = RequestParameters(
+                    fit_in=True,
+                    width=1200,
+                    height=1200,
+                    extension="JPEG",
+                    quality=85,
+                    image="some.jpeg",
+                    auto_png_to_jpg=True
+                )
+                ctx.request.engine = self.context.modules.engine
+                ctx.request.engine.extension = ".jpeg"
+                trans = Transformer(ctx)
+                trans.img_operation_worker()
+                results = ctx.request.engine.read(".jpeg", 85)
+                value = results
+
+            image_size = len(value)
+            logger.debug("_put %d (orig %d) bytes into column %s for row %s", image_size, original_image_size, col, key)
+
+            r += [
+                Mutation(column=(self.data_fam + b':' + col), value=value),
+                Mutation(column=b'metadata:image_size', value=pack("!q", image_size)),
+            ]
+
             if self.storage is None:
                 self._connect()
 
@@ -149,7 +190,7 @@ class Storage(storage.Storage):
                 self.storage.mutateRow(self.table, key, r, {})
             except:
                 # Try once more, seems to happen if downloading takes too long.
-                logger.warning("repeating _put %d bytes into column %s for row %s", len(value), col, key)
+                logger.warning("repeating _put %d bytes into column %s for row %s", image_size, col, key)
                 self._connect()
                 self.storage.mutateRow(self.table, key, r, {})
 

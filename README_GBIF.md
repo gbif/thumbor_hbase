@@ -2,18 +2,26 @@
 
 Additional metadata is recorded in the HBase table, including image size and number of hits (to HBase)
 
-    create 'thumbor',
+    create 'thumbor7',
       {NAME => 'image', IS_MOB => 'true', MOB_THRESHOLD => '524288', IS_MOB => 'true', 'BLOCKCACHE' => 'false', 'BLOCKSIZE' => '262144'},
       {NAME => 'metadata'},
       {NUMREGIONS => 128, SPLITALGO => 'HexStringSplit'}
 
-    scan 'thumbor',
-      {COLUMNS => ['metadata:image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata']}
+    scan 'thumbor7',
+      {ROWPREFIXFILTER => '0001', COLUMNS => ['metadata:image_size:toLong', 'metadata:original_image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata:retrieval_time_ms:toLong', 'metadata']}
+
+    get 'thumbor7',
+      '000001df57fd5aaa333432bff69e4cfe-occurrence/1259536186/media/85dbf78864a19b3f1c437bb1eef9c862',
+      {COLUMNS => ['metadata:image_size:toLong', 'metadata:original_image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata:retrieval_time_ms:toLong', 'metadata']}
+
+    count 'thumbor7', {COLUMNS=>['metadata']}
+      48711550 row(s)
+      Took 2246.3215 seconds
 
 The table is also present in Hive:
 
 ```
-CREATE EXTERNAL TABLE thumbor.thumbor7 (
+CREATE TABLE thumbor.thumbor7 (
   key string,
   created bigint,
   accessed bigint,
