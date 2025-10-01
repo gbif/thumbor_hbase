@@ -67,8 +67,9 @@ async def load(context, url_or_gbif_query):
                         context.headers['start_time'] = time.time_ns()
 
                         # Proxied URLs that work on HTTP only.
-                        if hostname == 'www.tropicos.org':
-                            url = url.replace('https:', 'http:')
+                        #if hostname == 'www.tropicos.org':
+                        #    logger.debug("Accessing Tropicos image %s with HTTP instead", url)
+                        #    url = url.replace('https:', 'http:')
 
                         return await http_loader.load(context, quote(url))
                         # During migration, read from the old HBase and fall back to HTTP.
