@@ -111,6 +111,10 @@ class Storage(storage.Storage):
                 Mutation(column=b'metadata:hostname', value=hostname.encode())
             ]
             use_file_storage |= hostname in self.context.config.LOCAL_FILE_STORAGE_HOSTNAMES
+            if not use_file_storage:
+                # NB only handles second level domains as that's all we need.
+                domain = '.'.join(hostname.split('.')[-2:])
+                use_file_storage |= domain in self.context.config.LOCAL_FILE_STORAGE_DOMAINS
 
         if 'start_time' in self.context.headers:
             retrieval_time_ms = int((time.time_ns()-self.context.headers['start_time'])/1000)
