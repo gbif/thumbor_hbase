@@ -175,6 +175,10 @@ class Storage(storage.Storage):
                 )
                 ctx.request.engine = self.context.modules.engine
                 ctx.request.engine.extension = ".jpeg"
+                orientation = ctx.request.engine.get_orientation()
+                if orientation not in (None, 1):
+                    logger.debug("Reorienting image with EXIF orientation %d before resizing", orientation)
+                    ctx.request.engine.reorientate()
                 trans = Transformer(ctx)
                 trans.img_operation_worker()
                 results = ctx.request.engine.read(".jpeg", 85)
