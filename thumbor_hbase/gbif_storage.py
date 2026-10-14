@@ -81,6 +81,7 @@ class Storage(storage.Storage):
             except:
                 logger.warning("Failed to increment hit count and access time for row %s", key)
         except IndexError:
+            logger.warning("Not in HBase %s", key)
             r = None
         except:
             r = None

@@ -14,6 +14,7 @@ import time
 from urllib.parse import urlparse, quote, unquote
 from thumbor_hbase.storage import Storage
 from . import hbase_migration_loader
+from . import polite_http_loader
 from thumbor.context import Context
 from thumbor.config import Config
 from thumbor.loaders import LoaderResult, http_loader
@@ -71,7 +72,10 @@ async def load(context, url_or_gbif_query):
                         #    logger.debug("Accessing Tropicos image %s with HTTP instead", url)
                         #    url = url.replace('https:', 'http:')
 
-                        return await http_loader.load(context, quote(url))
+                        if hostname in ['inaturalist-open-data.s3.amazonaws.com']:
+                            return await http_loader.load(context, quote(url))
+                        else:
+                            return await polite_http_loader.load(context, quote(url))
                         # During migration, read from the old HBase and fall back to HTTP.
                         #return await hbase_migration_loader.load(context, quote(url))
 
@@ -102,7 +106,7 @@ async def load(context, url_or_gbif_query):
             #return result
             logger.warning("Unsigned request for %s ALLOWED ANYWAY", url_or_gbif_query)
             context.headers['unsafe'] = 'unsafe'
-            return await http_loader.load(context, url_or_gbif_query)
+            return await polite_http_loader.load(context, url_or_gbif_query)
 
             # During migration, read from the old HBase and fall back to HTTP.
             #return await hbase_migration_loader.load(context, url_or_gbif_query)

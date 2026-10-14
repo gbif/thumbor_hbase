@@ -2,19 +2,25 @@
 
 Additional metadata is recorded in the HBase table, including image size and number of hits (to HBase)
 
+The Thumbor table is not using MOB as compaction was difficult/impossible. The blockcache is disabled instead, since
+the rows are therefore quite large with the images.
+
     create 'thumbor7',
-      {NAME => 'image', IS_MOB => 'true', MOB_THRESHOLD => '524288', IS_MOB => 'true', 'BLOCKCACHE' => 'false', 'BLOCKSIZE' => '262144'},
+      {NAME => 'image', 'BLOCKCACHE' => 'false', 'BLOCKSIZE' => '262144'},
       {NAME => 'metadata'},
       {NUMREGIONS => 128, SPLITALGO => 'HexStringSplit'}
 
+    create 'thumbor7pool',
+      {NAME => 'pool', 'BLOCKCACHE' => 'true', TTL => 600, IN_MEMORY => 'true'}
+
     scan 'thumbor7',
-      {ROWPREFIXFILTER => '0001', COLUMNS => ['metadata:image_size:toLong', 'metadata:original_image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata:retrieval_time_ms:toLong', 'metadata']}
+      {ROWPREFIXFILTER => '0001', COLUMNS => ['metadata:image_size:toLong', 'metadata:original_image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata:retrieval_time_ms:toLong', 'metadata'], LIMIT=>30}
 
     get 'thumbor7',
       '000001df57fd5aaa333432bff69e4cfe-occurrence/1259536186/media/85dbf78864a19b3f1c437bb1eef9c862',
       {COLUMNS => ['metadata:image_size:toLong', 'metadata:original_image_size:toLong', 'metadata:created:toLong', 'metadata:accessed:toLong', 'metadata:hits:toLong', 'metadata:retrieval_time_ms:toLong', 'metadata']}
 
-    count 'thumbor7', {COLUMNS=>['metadata']}
+    count 'thumbor7', {COLUMNS=>['metadata'], INTERVAL=>1000000, CACHE=>50000}
       48711550 row(s)
       Took 2246.3215 seconds
 
