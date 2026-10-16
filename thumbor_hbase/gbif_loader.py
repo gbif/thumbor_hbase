@@ -56,6 +56,17 @@ async def load(context, url_or_gbif_query):
                     logger.debug("On occurrence %s, media %s hashes to %s", occurrence_id, m['identifier'], m_hash.hexdigest())
                     if m_hash.hexdigest() == image_url_hash:
                         url = m['identifier']
+
+                        if 'format' in m:
+                            format = m['format']
+                            if format != 'application/octet-stream' and (format.startswith('application') or format.startswith('audio') or format.startswith('model') or format.startswith('text') or format.startswith('video') or format in ['pdf']):
+                                logger.info("On occurrence %s, rejecting media %s at %s with format %s", occurrence_id, image_url_hash, url, format)
+                                result = LoaderResult()
+                                result.successful = False
+                                result.error = 415 # Unsupported media type
+                                result.extras["reason"] = "Media at %s is declared to have media type (format) %s" % (url, format)
+                                return result
+
                         hostname = urlparse(url).hostname
                         dataset_key = occurrence['datasetKey']
                         logger.debug("On occurrence %s, found media %s to be %s", occurrence_id, image_url_hash, url)
